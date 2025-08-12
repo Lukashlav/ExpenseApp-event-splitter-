@@ -5,6 +5,8 @@ function EventDetail() {
   const { id } = useParams();
   const [event, setEvent] = useState(null);
   const [settlements, setSettlements] = useState(null);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
 
   useEffect(() => {
     fetch(`/api/events/${id}/`)
@@ -15,6 +17,34 @@ function EventDetail() {
       .then(res => res.json())
       .then(data => setSettlements(data));
   }, [id]);
+
+  const handleAddParticipant = (e) => {
+    e.preventDefault();
+    fetch(`/api/events/${id}/add_participant/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name, email }),
+    })
+      .then(res => {
+        if (!res.ok) {
+          throw new Error('Failed to add participant');
+        }
+        return res.json();
+      })
+      .then(newParticipant => {
+        setEvent(prevEvent => ({
+          ...prevEvent,
+          participants: [...prevEvent.participants, newParticipant],
+        }));
+        setName('');
+        setEmail('');
+      })
+      .catch(error => {
+        console.error(error);
+      });
+  };
 
   if (!event) return <div>Načítám data eventu...</div>;
 
@@ -29,6 +59,23 @@ function EventDetail() {
           <li key={p.id}>{p.name} ({p.email || 'bez emailu'})</li>
         ))}
       </ul>
+
+      <form onSubmit={handleAddParticipant}>
+        <input
+          type="text"
+          placeholder="Jméno"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          required
+        />
+        <input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+        />
+        <button type="submit">Přidat účastníka</button>
+      </form>
 
       <h3>Výdaje:</h3>
       <ul>

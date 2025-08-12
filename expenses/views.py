@@ -20,6 +20,19 @@ class EventViewSet(viewsets.ModelViewSet):
         settlements = event.get_settlement()
         return Response(settlements)
 
+    @action(detail=True, methods=['post'])
+    def add_participant(self, request, pk=None):
+        event = self.get_object()
+        name = request.data.get('name')
+        email = request.data.get('email')
+        if not name or not email:
+            return Response({'error': 'Both name and email are required.'}, status=400)
+        serializer = ParticipantSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(event=event)
+            return Response(serializer.data, status=201)
+        return Response(serializer.errors, status=400)
+
 class ParticipantViewSet(viewsets.ModelViewSet):
     queryset = Participant.objects.all()
     serializer_class = ParticipantSerializer
@@ -27,4 +40,3 @@ class ParticipantViewSet(viewsets.ModelViewSet):
 class ExpenseViewSet(viewsets.ModelViewSet):
     queryset = Expense.objects.all()
     serializer_class = ExpenseSerializer
-    

@@ -1,6 +1,8 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import EventDetail from './EventDetail';
+import NewEvent from './NewEvent';
+
 
 function EventList() {
   const [events, setEvents] = React.useState([]);
@@ -21,6 +23,7 @@ function EventList() {
           </li>
         ))}
       </ul>
+      <Link to="/new-event">+ Přidat nový event</Link>
     </div>
   );
 }
@@ -31,6 +34,7 @@ function App() {
       <Routes>
         <Route path="/" element={<EventList />} />
         <Route path="/events/:id" element={<EventDetail />} />
+        <Route path="/new-event" element={<NewEvent />} />
       </Routes>
     </Router>
   );
