@@ -13,6 +13,12 @@ class EventViewSet(viewsets.ModelViewSet):
         event = self.get_object()
         balances = event.get_balance()
         return Response(balances)
+    
+    @action(detail=True, methods=['get'])
+    def settlement(self, request, pk=None):
+        event = self.get_object()
+        settlements = event.get_settlement()
+        return Response(settlements)
 
 class ParticipantViewSet(viewsets.ModelViewSet):
     queryset = Participant.objects.all()

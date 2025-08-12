@@ -4,16 +4,16 @@ import { useParams, Link } from 'react-router-dom';
 function EventDetail() {
   const { id } = useParams();
   const [event, setEvent] = useState(null);
-  const [balance, setBalance] = useState(null);
+  const [settlements, setSettlements] = useState(null);
 
   useEffect(() => {
     fetch(`/api/events/${id}/`)
       .then(res => res.json())
       .then(data => setEvent(data));
 
-    fetch(`/api/events/${id}/balance/`)
+    fetch(`/api/events/${id}/settlement/`)
       .then(res => res.json())
-      .then(data => setBalance(data));
+      .then(data => setSettlements(data));
   }, [id]);
 
   if (!event) return <div>Načítám data eventu...</div>;
@@ -39,17 +39,17 @@ function EventDetail() {
         ))}
       </ul>
 
-      <h3>Saldo (kdo komu dluží):</h3>
-      {balance ? (
+      <h3>Kdo komu dluží:</h3>
+      {settlements && settlements.length > 0 ? (
         <ul>
-          {Object.entries(balance).map(([participantId, amount]) => (
-            <li key={participantId}>
-              {event.participants.find(p => p.id === parseInt(participantId))?.name || 'Unknown'}: {amount.toFixed(2)} Kč
+          {settlements.map((s, index) => (
+            <li key={index}>
+              {s.from} dluží {s.to} {s.amount.toFixed(2)} Kč
             </li>
           ))}
         </ul>
       ) : (
-        <p>Načítám saldo...</p>
+        <p>Žádné dluhy k vyrovnání.</p>
       )}
 
       <Link to="/">← Zpět na seznam eventů</Link>

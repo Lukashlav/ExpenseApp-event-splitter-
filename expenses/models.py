@@ -34,20 +34,26 @@ class Event(models.Model):
     def get_settlement(self):
         """
         Vrátí seznam plateb, které vyrovnají dluhy.
-        Výstup je list dictů: {"from": participant_name, "to": participant_name, "amount": Decimal}
+        Výstup je list dictů: {"from": participant_name, "to": participant_name, "amount": float}
         """
 
         balances = self.get_balance()
-        # převod na seznam (participant_id, balance)
         creditors = []
         debtors = []
 
-        for participant, amount in balances.items():
+        # Načteme všechny účastníky do slovníku pro rychlý lookup
+        participants = {p.id: p for p in self.participants.all()}
+
+        for participant_id, amount in balances.items():
             amt = Decimal(amount).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            participant = participants.get(participant_id)
+            if not participant:
+                continue  # pokud účastník není, přeskočíme
+
             if amt > 0:
                 creditors.append([participant, amt])
             elif amt < 0:
-                debtors.append([participant, -amt])  # záporná hodnota → dluh
+                debtors.append([participant, -amt])
 
         settlements = []
 
