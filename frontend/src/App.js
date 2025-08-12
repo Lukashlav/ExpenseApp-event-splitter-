@@ -1,11 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import EventDetail from './EventDetail';
 
-function App() {
-  const [events, setEvents] = useState([]);
+function EventList() {
+  const [events, setEvents] = React.useState([]);
 
-  useEffect(() => {
+  React.useEffect(() => {
     fetch('/api/events/')
-      .then(response => response.json())
+      .then(res => res.json())
       .then(data => setEvents(data.results || data));
   }, []);
 
@@ -14,10 +16,23 @@ function App() {
       <h1>Seznam eventů</h1>
       <ul>
         {events.map(event => (
-          <li key={event.id}>{event.title}</li>
+          <li key={event.id}>
+            <Link to={`/events/${event.id}`}>{event.title}</Link>
+          </li>
         ))}
       </ul>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<EventList />} />
+        <Route path="/events/:id" element={<EventDetail />} />
+      </Routes>
+    </Router>
   );
 }
 
