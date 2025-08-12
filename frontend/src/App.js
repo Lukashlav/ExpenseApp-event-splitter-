@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import EventDetail from './EventDetail';
 import NewEvent from './NewEvent';
+import AddExpense from './AddExpense';
 
 
 function EventList() {
@@ -35,6 +36,7 @@ function App() {
         <Route path="/" element={<EventList />} />
         <Route path="/events/:id" element={<EventDetail />} />
         <Route path="/new-event" element={<NewEvent />} />
+        <Route path="/events/:id/add-expense" element={<AddExpense />} />
       </Routes>
     </Router>
   );

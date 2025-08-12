@@ -5,6 +5,8 @@ import expenses.views
 
 router = DefaultRouter()
 router.register(r'events', expenses.views.EventViewSet, basename='event')
+router.register(r'participants', expenses.views.ParticipantViewSet, basename='participant')
+router.register(r'expenses', expenses.views.ExpenseViewSet, basename='expense')
 
 urlpatterns = [
     path('admin/', admin.site.urls),

@@ -55,8 +55,8 @@ function EventDetail() {
 
       <h3>Účastníci:</h3>
       <ul>
-        {event.participants.map(p => (
-          <li key={p.id}>{p.name} ({p.email || 'bez emailu'})</li>
+        {event.participants?.map(p => (
+          <li key={p.id}>{p?.name || 'Neznámý účastník'} ({p?.email || 'bez emailu'})</li>
         ))}
       </ul>
 
@@ -79,12 +79,13 @@ function EventDetail() {
 
       <h3>Výdaje:</h3>
       <ul>
-        {event.expenses.map(e => (
+        {event.expenses?.map(e => (
           <li key={e.id}>
-            {e.description}: {e.amount} Kč, zaplatil {e.payer.name}
+            {e.description}: {e.amount} Kč, zaplatil {e.payer?.name || 'neznámý'}
           </li>
         ))}
       </ul>
+      <Link to={`/events/${id}/add-expense`}>+ Přidat výdaj</Link>
 
       <h3>Kdo komu dluží:</h3>
       {settlements && settlements.length > 0 ? (
