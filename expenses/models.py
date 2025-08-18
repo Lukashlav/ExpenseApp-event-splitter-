@@ -18,13 +18,18 @@ class Event(models.Model):
         balances = {p.id: 0 for p in self.participants.all()}
 
         for expense in self.expenses.all():
-            split_count = expense.split_between.count()
-            if split_count == 0:
+            if expense.payer is None:
                 continue
 
+            participants_to_split = expense.split_between.all()
+            if not participants_to_split.exists():
+                # Pokud není nikdo ve split_between, rozdělíme výdaj mezi všechny účastníky
+                participants_to_split = self.participants.all()
+
+            split_count = participants_to_split.count()
             share = expense.amount / split_count
 
-            for participant in expense.split_between.all():
+            for participant in participants_to_split:
                 balances[participant.id] -= share
 
             balances[expense.payer.id] += expense.amount
@@ -36,7 +41,6 @@ class Event(models.Model):
         Vrátí seznam plateb, které vyrovnají dluhy.
         Výstup je list dictů: {"from": participant_name, "to": participant_name, "amount": float}
         """
-
         balances = self.get_balance()
         creditors = []
         debtors = []
@@ -62,11 +66,12 @@ class Event(models.Model):
             debtor, debt_amt = debtors[i]
             creditor, cred_amt = creditors[j]
             payment = min(debt_amt, cred_amt)
-            settlements.append({
-                "from": debtor.name,
-                "to": creditor.name,
-                "amount": float(payment)
-            })
+            if debtor is not None and creditor is not None:
+                settlements.append({
+                    "from": debtor.name,
+                    "to": creditor.name,
+                    "amount": float(payment)
+                })
 
             debt_amt -= payment
             cred_amt -= payment

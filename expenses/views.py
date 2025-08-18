@@ -40,3 +40,15 @@ class ParticipantViewSet(viewsets.ModelViewSet):
 class ExpenseViewSet(viewsets.ModelViewSet):
     queryset = Expense.objects.all()
     serializer_class = ExpenseSerializer
+
+    def perform_create(self, serializer):
+        event_id = self.request.data.get('event_id')
+        if event_id is not None:
+            try:
+                event = Event.objects.get(pk=event_id)
+            except Event.DoesNotExist:
+                from rest_framework.exceptions import ValidationError
+                raise ValidationError({'event_id': 'Event with this ID does not exist.'})
+            serializer.save(event=event)
+        else:
+            serializer.save()

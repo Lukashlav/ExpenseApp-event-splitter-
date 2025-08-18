@@ -8,6 +8,22 @@ function EventDetail() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
 
+  const handleDeleteExpense = (expenseId) => {
+    fetch(`/api/expenses/${expenseId}/`, {
+      method: 'DELETE',
+    })
+      .then(res => {
+        if (!res.ok) {
+          throw new Error('Failed to delete expense');
+        }
+        setEvent(prevEvent => ({
+          ...prevEvent,
+          expenses: prevEvent.expenses.filter(exp => exp.id !== expenseId),
+        }));
+      })
+      .catch(error => console.error(error));
+  };
+
   useEffect(() => {
     fetch(`/api/events/${id}/`)
       .then(res => res.json())
@@ -81,7 +97,8 @@ function EventDetail() {
       <ul>
         {event.expenses?.map(e => (
           <li key={e.id}>
-            {e.description}: {e.amount} Kč, zaplatil {e.payer?.name || 'neznámý'}
+            {e.description}: {e.amount} Kč, zaplatil {e.payer?.name || 'neznámý'}{' '}
+            <button onClick={() => handleDeleteExpense(e.id)}>Smazat</button>
           </li>
         ))}
       </ul>
