@@ -100,11 +100,11 @@ class Participant(models.Model):
         return f"{self.name} ({self.event.title})"
 
 class Expense(models.Model):
-    event = models.ForeignKey(Event, related_name="expenses", on_delete=models.CASCADE)
-    payer = models.ForeignKey(Participant, related_name="paid_expenses", on_delete=models.CASCADE)
+    description = models.CharField(max_length=255)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
-    description = models.CharField(max_length=255, blank=True)
-    split_between = models.ManyToManyField(Participant, related_name="splits", blank=True)
+    payer = models.ForeignKey(Participant, on_delete=models.CASCADE, related_name='paid_expenses')
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='expenses')
+    split_between = models.ManyToManyField(Participant, related_name='shared_expenses', blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

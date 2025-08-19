@@ -14,82 +14,46 @@ function EventDetail() {
       method: 'DELETE',
     })
       .then(res => {
-        if (!res.ok) {
-          throw new Error('Failed to delete expense');
-        }
+        if (!res.ok) throw new Error('Failed to delete expense');
         setEvent(prevEvent => ({
           ...prevEvent,
           expenses: prevEvent.expenses.filter(exp => exp.id !== expenseId),
         }));
       })
-      .catch(error => console.error(error));
+      .catch(console.error);
   };
 
   const handleDeleteEvent = () => {
-    fetch(`/api/events/${id}/`, {
-      method: 'DELETE',
-    })
-      .then(res => {
-        if (!res.ok) {
-          throw new Error('Failed to delete event');
-        }
-        navigate('/');
-      })
-      .catch(error => console.error(error));
+    fetch(`/api/events/${id}/`, { method: 'DELETE' })
+      .then(res => { if (!res.ok) throw new Error('Failed to delete event'); navigate('/'); })
+      .catch(console.error);
   };
 
   useEffect(() => {
-    fetch(`/api/events/${id}/`)
-      .then(res => res.json())
-      .then(data => setEvent(data));
-
-    fetch(`/api/events/${id}/settlement/`)
-      .then(res => res.json())
-      .then(data => setSettlements(data));
+    fetch(`/api/events/${id}/`).then(res => res.json()).then(setEvent);
+    fetch(`/api/events/${id}/settlement/`).then(res => res.json()).then(setSettlements);
   }, [id]);
 
   const handleAddParticipant = (e) => {
     e.preventDefault();
     fetch(`/api/events/${id}/add_participant/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, email }),
     })
-      .then(res => {
-        if (!res.ok) {
-          throw new Error('Failed to add participant');
-        }
-        return res.json();
-      })
+      .then(res => { if (!res.ok) throw new Error('Failed to add participant'); return res.json(); })
       .then(newParticipant => {
-        setEvent(prevEvent => ({
-          ...prevEvent,
-          participants: [...prevEvent.participants, newParticipant],
-        }));
-        setName('');
-        setEmail('');
+        setEvent(prevEvent => ({ ...prevEvent, participants: [...prevEvent.participants, newParticipant] }));
+        setName(''); setEmail('');
       })
-      .catch(error => {
-        console.error(error);
-      });
+      .catch(console.error);
   };
 
   const handleDeleteParticipant = (participantId) => {
-    fetch(`/api/participants/${participantId}/`, {
-      method: 'DELETE',
-    })
-      .then(res => {
-        if (!res.ok) {
-          throw new Error('Failed to delete participant');
-        }
-        setEvent(prevEvent => ({
-          ...prevEvent,
-          participants: prevEvent.participants.filter(p => p.id !== participantId),
-        }));
+    fetch(`/api/participants/${participantId}/`, { method: 'DELETE' })
+      .then(res => { if (!res.ok) throw new Error('Failed to delete participant');
+        setEvent(prevEvent => ({ ...prevEvent, participants: prevEvent.participants.filter(p => p.id !== participantId) }));
       })
-      .catch(error => console.error(error));
+      .catch(console.error);
   };
 
   if (!event) return <div>Načítám data eventu...</div>;
@@ -103,53 +67,39 @@ function EventDetail() {
       <h3>Účastníci:</h3>
       <ul>
         {event.participants?.map(p => (
-          <li key={p.id}>
-            {p?.name || 'Neznámý účastník'} ({p?.email || 'bez emailu'})
-            <button onClick={() => handleDeleteParticipant(p.id)}>Smazat</button>
-          </li>
+          <li key={p.id}>{p?.name || 'Neznámý účastník'} ({p?.email || 'bez emailu'}) <button onClick={() => handleDeleteParticipant(p.id)}>Smazat</button></li>
         ))}
       </ul>
 
       <form onSubmit={handleAddParticipant}>
-        <input
-          type="text"
-          placeholder="Jméno"
-          value={name}
-          onChange={e => setName(e.target.value)}
-          required
-        />
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={e => setEmail(e.target.value)}
-        />
+        <input type="text" placeholder="Jméno" value={name} onChange={e => setName(e.target.value)} required />
+        <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
         <button type="submit">Přidat účastníka</button>
       </form>
 
-      <h3>Výdaje:</h3>
-      <ul>
-        {event.expenses?.map(e => (
-          <li key={e.id}>
-            {e.description}: {e.amount} Kč, zaplatil {e.payer?.name || 'neznámý'}{' '}
-            <button onClick={() => handleDeleteExpense(e.id)}>Smazat</button>
-          </li>
-        ))}
-      </ul>
+      <h3>Výdaje</h3>
+      <table border="1" cellPadding="5">
+        <thead>
+          <tr><th>Popis</th><th>Částka (Kč)</th><th>Zaplatil</th><th>Komu</th><th>Akce</th></tr>
+        </thead>
+        <tbody>
+          {event.expenses?.map(exp => (
+            <tr key={exp.id}>
+              <td>{exp.description}</td>
+              <td>{exp.amount}</td>
+              <td>{exp.payer?.name || "Neznámý"}</td>
+              <td>{Array.isArray(exp.split_between) && exp.split_between.length > 0 ? exp.split_between.map(p => p.name).join(", ") : "Nikomu"}</td>
+              <td><button onClick={() => handleDeleteExpense(exp.id)}>Smazat</button></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
       <Link to={`/events/${id}/add-expense`}>+ Přidat výdaj</Link>
 
       <h3>Kdo komu dluží:</h3>
       {settlements && settlements.length > 0 ? (
-        <ul>
-          {settlements.map((s, index) => (
-            <li key={index}>
-              {s.from} dluží {s.to} {s.amount.toFixed(2)} Kč
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p>Žádné dluhy k vyrovnání.</p>
-      )}
+        <ul>{settlements.map((s,i) => <li key={i}>{s.from} dluží {s.to} {s.amount.toFixed(2)} Kč</li>)}</ul>
+      ) : (<p>Žádné dluhy k vyrovnání.</p>)}
 
       <Link to="/">← Zpět na seznam eventů</Link>
     </div>

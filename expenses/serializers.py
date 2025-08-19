@@ -12,16 +12,17 @@ class ExpenseSerializer(serializers.ModelSerializer):
         queryset=Participant.objects.all(), write_only=True, source='payer'
     )
     event = serializers.PrimaryKeyRelatedField(queryset=Event.objects.all())
-    split_between = serializers.PrimaryKeyRelatedField(
-        queryset=Participant.objects.all(), many=True, required=False
+    split_between = ParticipantSerializer(many=True, read_only=True)
+    split_between_ids = serializers.PrimaryKeyRelatedField(
+        queryset=Participant.objects.all(), many=True, write_only=True, source='split_between'
     )
 
     class Meta:
         model = Expense
-        fields = ['id', 'description', 'amount', 'payer', 'paid_by', 'event', 'split_between']
+        fields = ['id', 'description', 'amount', 'payer', 'paid_by', 'event', 'split_between', 'split_between_ids']
 
     def create(self, validated_data):
-        split_between_data = validated_data.pop('split_between', [])
+        split_between_data = validated_data.pop('split_between')
         expense = Expense.objects.create(**validated_data)
         expense.split_between.set(split_between_data)
         return expense

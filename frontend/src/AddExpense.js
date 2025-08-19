@@ -7,6 +7,8 @@ function AddExpense() {
   const [amount, setAmount] = useState('');
   const [paidBy, setPaidBy] = useState('');
   const [participants, setParticipants] = useState([]);
+  const [selectedParticipants, setSelectedParticipants] = useState([]);
+  const [selectAll, setSelectAll] = useState(false);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
 
@@ -15,6 +17,23 @@ function AddExpense() {
       .then(res => res.json())
       .then(data => setParticipants(data.participants || []));
   }, [id]);
+
+  const handleCheckboxChange = (participantId) => {
+    if (selectedParticipants.includes(participantId)) {
+      setSelectedParticipants(selectedParticipants.filter(p => p !== participantId));
+    } else {
+      setSelectedParticipants([...selectedParticipants, participantId]);
+    }
+  };
+
+  const handleSelectAll = () => {
+    if (selectAll) {
+      setSelectedParticipants([]);
+    } else {
+      setSelectedParticipants(participants.map(p => p.id));
+    }
+    setSelectAll(!selectAll);
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -27,7 +46,8 @@ function AddExpense() {
         description,
         amount: parseFloat(amount),
         paid_by: paidBy,
-        event: Number(id), // convert id to number
+        event: Number(id),
+        split_between_ids: selectedParticipants
       }),
     })
       .then(res => {
@@ -40,6 +60,8 @@ function AddExpense() {
         setDescription('');
         setAmount('');
         setPaidBy('');
+        setSelectedParticipants([]);
+        setSelectAll(false);
         navigate(`/events/${id}`);
       })
       .catch(err => setError(err.message));
@@ -77,6 +99,29 @@ function AddExpense() {
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
+        </div>
+        <div>
+          <label>Přiřadit výdaj:</label><br />
+          <div>
+            <label>
+              <input
+                type="checkbox"
+                checked={selectAll}
+                onChange={handleSelectAll}
+              /> Všem účastníkům
+            </label>
+          </div>
+          {participants.map(p => (
+            <div key={p.id}>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={selectedParticipants.includes(p.id)}
+                  onChange={() => handleCheckboxChange(p.id)}
+                /> {p.name}
+              </label>
+            </div>
+          ))}
         </div>
         <button type="submit">Přidat výdaj</button>
       </form>
