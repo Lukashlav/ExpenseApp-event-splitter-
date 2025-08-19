@@ -1,6 +1,10 @@
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.exceptions import ValidationError
 from .models import Event, Participant, Expense
 from .serializers import EventSerializer, ParticipantSerializer, ExpenseSerializer
 
@@ -47,8 +51,25 @@ class ExpenseViewSet(viewsets.ModelViewSet):
             try:
                 event = Event.objects.get(pk=event_id)
             except Event.DoesNotExist:
-                from rest_framework.exceptions import ValidationError
                 raise ValidationError({'event_id': 'Event with this ID does not exist.'})
             serializer.save(event=event)
         else:
             serializer.save()
+
+@csrf_exempt
+def delete_participant(request, pk):
+    if request.method == "DELETE":
+        participant = get_object_or_404(Participant, pk=pk)
+        participant.delete()
+        return JsonResponse({"status": "deleted"})
+    return JsonResponse({"error": "Invalid request"}, status=400)
+
+
+# Funkce pro mazání celých eventů
+@csrf_exempt
+def delete_event(request, event_id):
+    if request.method == "DELETE":
+        event = get_object_or_404(Event, pk=event_id)
+        event.delete()
+        return JsonResponse({"status": "deleted"})
+    return JsonResponse({"error": "Invalid request"}, status=400)

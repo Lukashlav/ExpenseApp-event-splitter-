@@ -11,4 +11,6 @@ router.register(r'expenses', expenses.views.ExpenseViewSet, basename='expense')
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)),
+    path('api/participants/<int:pk>/delete/', expenses.views.delete_participant, name="delete_participant"),
+    path('api/events/<int:event_id>/delete/', expenses.views.delete_event, name='delete_event'),
 ]

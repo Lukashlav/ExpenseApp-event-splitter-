@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 
 function EventDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [event, setEvent] = useState(null);
   const [settlements, setSettlements] = useState(null);
   const [name, setName] = useState('');
@@ -20,6 +21,19 @@ function EventDetail() {
           ...prevEvent,
           expenses: prevEvent.expenses.filter(exp => exp.id !== expenseId),
         }));
+      })
+      .catch(error => console.error(error));
+  };
+
+  const handleDeleteEvent = () => {
+    fetch(`/api/events/${id}/`, {
+      method: 'DELETE',
+    })
+      .then(res => {
+        if (!res.ok) {
+          throw new Error('Failed to delete event');
+        }
+        navigate('/');
       })
       .catch(error => console.error(error));
   };
@@ -62,17 +76,37 @@ function EventDetail() {
       });
   };
 
+  const handleDeleteParticipant = (participantId) => {
+    fetch(`/api/participants/${participantId}/`, {
+      method: 'DELETE',
+    })
+      .then(res => {
+        if (!res.ok) {
+          throw new Error('Failed to delete participant');
+        }
+        setEvent(prevEvent => ({
+          ...prevEvent,
+          participants: prevEvent.participants.filter(p => p.id !== participantId),
+        }));
+      })
+      .catch(error => console.error(error));
+  };
+
   if (!event) return <div>Načítám data eventu...</div>;
 
   return (
     <div>
       <h2>{event.title}</h2>
+      <button onClick={handleDeleteEvent}>Smazat event</button>
       <p>{event.description}</p>
 
       <h3>Účastníci:</h3>
       <ul>
         {event.participants?.map(p => (
-          <li key={p.id}>{p?.name || 'Neznámý účastník'} ({p?.email || 'bez emailu'})</li>
+          <li key={p.id}>
+            {p?.name || 'Neznámý účastník'} ({p?.email || 'bez emailu'})
+            <button onClick={() => handleDeleteParticipant(p.id)}>Smazat</button>
+          </li>
         ))}
       </ul>
 
