@@ -61,15 +61,16 @@ function EventDetail() {
   return (
     <div>
       <h2>{event.title}</h2>
-      <button onClick={handleDeleteEvent}>Smazat event</button>
       <p>{event.description}</p>
 
       <h3>Účastníci:</h3>
-      <ul>
-        {event.participants?.map(p => (
-          <li key={p.id}>{p?.name || 'Neznámý účastník'} ({p?.email || 'bez emailu'}) <button onClick={() => handleDeleteParticipant(p.id)}>Smazat</button></li>
-        ))}
-      </ul>
+      <div className="participants-list">
+        <ul>
+          {event.participants?.map(p => (
+            <li key={p.id}>{p?.name || 'Neznámý účastník'} ({p?.email || 'bez emailu'}) <button onClick={() => handleDeleteParticipant(p.id)}>Smazat</button></li>
+          ))}
+        </ul>
+      </div>
 
       <form onSubmit={handleAddParticipant}>
         <input type="text" placeholder="Jméno" value={name} onChange={e => setName(e.target.value)} required />
@@ -78,22 +79,24 @@ function EventDetail() {
       </form>
 
       <h3>Výdaje</h3>
-      <table border="1" cellPadding="5">
-        <thead>
-          <tr><th>Popis</th><th>Částka (Kč)</th><th>Zaplatil</th><th>Komu</th><th>Akce</th></tr>
-        </thead>
-        <tbody>
-          {event.expenses?.map(exp => (
-            <tr key={exp.id}>
-              <td>{exp.description}</td>
-              <td>{exp.amount}</td>
-              <td>{exp.payer?.name || "Neznámý"}</td>
-              <td>{Array.isArray(exp.split_between) && exp.split_between.length > 0 ? exp.split_between.map(p => p.name).join(", ") : "Nikomu"}</td>
-              <td><button onClick={() => handleDeleteExpense(exp.id)}>Smazat</button></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="table-container">
+        <table className="expenses-table">
+          <thead>
+            <tr><th>Popis</th><th>Částka (Kč)</th><th>Zaplatil</th><th>Komu</th><th>Akce</th></tr>
+          </thead>
+          <tbody>
+            {event.expenses?.map(exp => (
+              <tr key={exp.id}>
+                <td className="description">{exp.description}</td>
+                <td className="amount">{exp.amount}</td>
+                <td className="payer">{exp.payer?.name || "Neznámý"}</td>
+                <td className="recipients">{Array.isArray(exp.split_between) && exp.split_between.length > 0 ? exp.split_between.map(p => p.name).join(", ") : "Nikomu"}</td>
+                <td className="actions"><button onClick={() => handleDeleteExpense(exp.id)}>Smazat</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       <Link to={`/events/${id}/add-expense`}>+ Přidat výdaj</Link>
 
       <h3>Kdo komu dluží:</h3>
@@ -101,6 +104,9 @@ function EventDetail() {
         <ul>{settlements.map((s,i) => <li key={i}>{s.from} dluží {s.to} {s.amount.toFixed(2)} Kč</li>)}</ul>
       ) : (<p>Žádné dluhy k vyrovnání.</p>)}
 
+      <br />
+      <button onClick={handleDeleteEvent}>Smazat event</button>
+      <br />
       <Link to="/">← Zpět na seznam eventů</Link>
     </div>
   );
