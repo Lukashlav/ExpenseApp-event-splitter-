@@ -1,6 +1,13 @@
+from django.db import models
 import uuid
 from decimal import Decimal, ROUND_HALF_UP
-from django.db import models
+
+class Category(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
 
 class Event(models.Model):
     title = models.CharField(max_length=200)
@@ -105,7 +112,19 @@ class Expense(models.Model):
     payer = models.ForeignKey(Participant, on_delete=models.CASCADE, related_name='paid_expenses')
     event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='expenses')
     split_between = models.ManyToManyField(Participant, related_name='shared_expenses', blank=True)
+    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name="expenses")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"{self.description} - {self.amount} ({self.event.title})"
+
+
+class Settlement(models.Model):
+    event = models.ForeignKey(Event, related_name="settlements", on_delete=models.CASCADE)
+    from_participant = models.ForeignKey(Participant, related_name="settlements_from", on_delete=models.CASCADE)
+    to_participant = models.ForeignKey(Participant, related_name="settlements_to", on_delete=models.CASCADE)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.from_participant.name} → {self.to_participant.name}: {self.amount} Kč"

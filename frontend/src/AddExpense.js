@@ -9,6 +9,8 @@ function AddExpense() {
   const [participants, setParticipants] = useState([]);
   const [selectedParticipants, setSelectedParticipants] = useState([]);
   const [selectAll, setSelectAll] = useState(false);
+  const [categories, setCategories] = useState([]);
+  const [category, setCategory] = useState('');
   const [error, setError] = useState(null);
   const navigate = useNavigate();
 
@@ -16,6 +18,9 @@ function AddExpense() {
     fetch(`/api/events/${id}/`)
       .then(res => res.json())
       .then(data => setParticipants(data.participants || []));
+    fetch('/api/categories/')
+      .then(res => res.json())
+      .then(data => setCategories(data || []));
   }, [id]);
 
   const handleCheckboxChange = (participantId) => {
@@ -39,16 +44,20 @@ function AddExpense() {
     e.preventDefault();
     setError(null);
 
+    const payload = {
+      description,
+      amount: parseFloat(amount),
+      payer: Number(paidBy),
+      event: Number(id),
+      split_between_ids: selectedParticipants.map(Number),
+      category: category ? Number(category) : null
+    };
+    console.log('Sending expense payload:', payload);
+
     fetch('/api/expenses/', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        description,
-        amount: parseFloat(amount),
-        paid_by: paidBy,
-        event: Number(id),
-        split_between_ids: selectedParticipants
-      }),
+      body: JSON.stringify(payload),
     })
       .then(res => {
         if (!res.ok) {
@@ -62,6 +71,7 @@ function AddExpense() {
         setPaidBy('');
         setSelectedParticipants([]);
         setSelectAll(false);
+        setCategory('');
         navigate(`/events/${id}`);
       })
       .catch(err => setError(err.message));
@@ -97,6 +107,15 @@ function AddExpense() {
             <option value="">Vyber účastníka</option>
             {participants.map(p => (
               <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label>Kategorie:</label><br />
+          <select value={category} onChange={e => setCategory(e.target.value)}>
+            <option value="">Žádná</option>
+            {categories.map(c => (
+              <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
         </div>

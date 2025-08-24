@@ -82,7 +82,14 @@ function EventDetail() {
       <div className="table-container">
         <table className="expenses-table">
           <thead>
-            <tr><th>Popis</th><th>Částka (Kč)</th><th>Zaplatil</th><th>Komu</th><th>Akce</th></tr>
+            <tr>
+              <th className="th-description">Popis</th>
+              <th className="th-amount">Částka (Kč)</th>
+              <th className="th-payer">Zaplatil</th>
+              <th className="th-recipients">Komu</th>
+              <th className="th-category">Kategorie</th>
+              <th className="th-actions">Akce</th>
+            </tr>
           </thead>
           <tbody>
             {event.expenses?.map(exp => (
@@ -90,8 +97,15 @@ function EventDetail() {
                 <td className="description">{exp.description}</td>
                 <td className="amount">{exp.amount}</td>
                 <td className="payer">{exp.payer?.name || "Neznámý"}</td>
-                <td className="recipients">{Array.isArray(exp.split_between) && exp.split_between.length > 0 ? exp.split_between.map(p => p.name).join(", ") : "Nikomu"}</td>
-                <td className="actions"><button onClick={() => handleDeleteExpense(exp.id)}>Smazat</button></td>
+                <td className="recipients">
+                  {Array.isArray(exp.split_between) && exp.split_between.length > 0
+                    ? exp.split_between.map(p => p.name).join(", ")
+                    : "Nikomu"}
+                </td>
+                <td className="category">{exp.category?.name || "Neznámá"}</td>
+                <td className="actions">
+                  <button onClick={() => handleDeleteExpense(exp.id)}>Smazat</button>
+                </td>
               </tr>
             ))}
           </tbody>

@@ -5,8 +5,9 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
-from .models import Event, Participant, Expense
-from .serializers import EventSerializer, ParticipantSerializer, ExpenseSerializer
+from .models import Event, Participant, Expense, Category
+from .serializers import EventSerializer, ParticipantSerializer, ExpenseSerializer, CategorySerializer
+from .forms import ParticipantForm
 
 class EventViewSet(viewsets.ModelViewSet):
     queryset = Event.objects.all()
@@ -27,15 +28,14 @@ class EventViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def add_participant(self, request, pk=None):
         event = self.get_object()
-        name = request.data.get('name')
-        email = request.data.get('email')
-        if not name or not email:
-            return Response({'error': 'Both name and email are required.'}, status=400)
-        serializer = ParticipantSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save(event=event)
+        form = ParticipantForm(request.data)
+        if form.is_valid():
+            participant = form.save(commit=False)
+            participant.event = event
+            participant.save()
+            serializer = ParticipantSerializer(participant)
             return Response(serializer.data, status=201)
-        return Response(serializer.errors, status=400)
+        return Response(form.errors, status=400)
 
 class ParticipantViewSet(viewsets.ModelViewSet):
     queryset = Participant.objects.all()
@@ -46,15 +46,44 @@ class ExpenseViewSet(viewsets.ModelViewSet):
     serializer_class = ExpenseSerializer
 
     def perform_create(self, serializer):
-        event_id = self.request.data.get('event_id')
-        if event_id is not None:
+        # Get event, category, split_between from request data
+        event_id = self.request.data.get('event')
+        category_id = self.request.data.get('category')
+        split_between_ids = self.request.data.get('split_between_ids')
+
+        event = None
+        category = None
+        split_between = None
+
+        if event_id:
             try:
                 event = Event.objects.get(pk=event_id)
             except Event.DoesNotExist:
-                raise ValidationError({'event_id': 'Event with this ID does not exist.'})
-            serializer.save(event=event)
-        else:
-            serializer.save()
+                raise ValidationError({'event': 'Event with this ID does not exist.'})
+
+        if category_id:
+            try:
+                category = Category.objects.get(pk=category_id)
+            except Category.DoesNotExist:
+                raise ValidationError({'category': 'Category with this ID does not exist.'})
+
+        if split_between_ids:
+            if isinstance(split_between_ids, str):
+                # Try to parse comma-separated string
+                split_between_ids = [s for s in split_between_ids.split(',') if s]
+            split_between = Participant.objects.filter(id__in=split_between_ids)
+            if split_between.count() != len(split_between_ids):
+                raise ValidationError({'split_between': 'One or more participants do not exist.'})
+
+        expense = serializer.save(event=event, category=category)
+        if split_between is not None:
+            expense.split_between.set(split_between)
+
+
+# CategoryViewSet for registration in urls.py
+class CategoryViewSet(viewsets.ModelViewSet):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
 
 @csrf_exempt
 def delete_participant(request, pk):
