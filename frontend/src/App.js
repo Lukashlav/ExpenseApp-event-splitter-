@@ -1,5 +1,6 @@
 import React from 'react';
-import { Routes, Route, Link } from 'react-router-dom';
+import { Routes, Route, Link, Navigate, useNavigate } from 'react-router-dom';
+
 import EventDetail from './EventDetail';
 import NewEvent from './NewEvent';
 import AddExpense from './AddExpense';
@@ -7,6 +8,7 @@ import AddExpense from './AddExpense';
 function GlobalStyles() {
   return (
     <style>{`
+      @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
       /* Hide common top progress bars (NProgress, Pace) if injected anywhere */
       #nprogress, #nprogress .bar { display: none !important; }
       .pace, .pace .pace-progress, .pace .pace-activity { display: none !important; }
@@ -19,6 +21,49 @@ function GlobalStyles() {
       html, body, #root { background: #f2f6fc !important; }
     `}</style>
   );
+}
+
+// ---- Simple auth helpers (token stored in localStorage) ----
+const AUTH_KEY = 'authToken';
+const getToken = () => localStorage.getItem(AUTH_KEY);
+const setToken = (t) => localStorage.setItem(AUTH_KEY, t);
+const clearToken = () => localStorage.removeItem(AUTH_KEY);
+
+function AuthBar() {
+  const navigate = useNavigate();
+  const [token, setTok] = React.useState(getToken());
+
+  React.useEffect(() => {
+    const onStorage = () => setTok(getToken());
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  const onLogout = () => {
+    clearToken();
+    setTok(null);
+    navigate('/');
+  };
+
+  return (
+    <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
+      {token ? (
+        <button onClick={onLogout} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#f8fafc', cursor: 'pointer', fontWeight: 600 }}>Odhlásit</button>
+      ) : (
+        <div style={{ display: 'flex', gap: 12 }}>
+          <Link to="/login" style={{ padding: '3px 6px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#f8fafc', textDecoration: 'none', fontWeight: 600, fontSize: '0.8rem' }}>Přihlásit</Link>
+          <Link to="/signup" style={{ padding: '3px 6px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#f8fafc', textDecoration: 'none', fontWeight: 600, fontSize: '0.8rem' }}>Registrovat</Link>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Guard for protected routes
+function ProtectedRoute({ children }) {
+  const token = getToken();
+  if (!token) return <Navigate to="/login" replace />;
+  return children;
 }
 
 function EventList() {
@@ -58,8 +103,8 @@ function EventList() {
     },
     toolbar: {
       display: 'flex',
-      gap: 12,
       alignItems: 'center',
+      gap: 24, // add larger space between the auth buttons group and the primary button
     },
     primaryBtn: {
       display: 'inline-flex',
@@ -140,6 +185,7 @@ function EventList() {
       <div style={styles.headerRow}>
         <h1 style={styles.title}>ExpenseApp</h1>
         <div style={styles.toolbar}>
+          <AuthBar />
           <Link
             to="/new-event"
             onMouseEnter={() => setHoveredBtn(true)}
@@ -187,15 +233,101 @@ function EventList() {
   );
 }
 
+function Login() {
+  const navigate = useNavigate();
+  const [username, setUsername] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [error, setError] = React.useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    try {
+      const res = await fetch('/api/login/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || 'Přihlášení selhalo');
+      }
+      const data = await res.json();
+      if (data.token) setToken(data.token);
+      navigate('/');
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  return (
+    <div style={{ maxWidth: 420, margin: '48px auto', padding: 24, background: '#fff', borderRadius: 12, boxShadow: '0 10px 30px rgba(0,0,0,0.06)' }}>
+      <h2 style={{ marginTop: 0, color: '#1e3a8a' }}>Přihlášení</h2>
+      {error && <div style={{ color: '#b91c1c', marginBottom: 12 }}>{error}</div>}
+      <form onSubmit={handleSubmit}>
+        <label>Uživatel</label>
+        <input value={username} onChange={e => setUsername(e.target.value)} required />
+        <label>Heslo</label>
+        <input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+        <button type="submit" style={{ marginTop: 8, padding: '8px 12px', borderRadius: 8, background: '#2563eb', color: '#fff', border: '1px solid #1f4ed8', fontWeight: 600 }}>Přihlásit</button>
+      </form>
+      <p style={{ marginTop: 16 }}>Nemáš účet? <Link to="/signup">Zaregistruj se</Link>.</p>
+    </div>
+  );
+}
+
+function Signup() {
+  const navigate = useNavigate();
+  const [username, setUsername] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [error, setError] = React.useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    try {
+      const res = await fetch('/api/signup/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || 'Registrace selhala');
+      }
+      // Auto-redirect to login; alternatively, if backend returns token, call setToken and go home
+      navigate('/login');
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  return (
+    <div style={{ maxWidth: 420, margin: '48px auto', padding: 24, background: '#fff', borderRadius: 12, boxShadow: '0 10px 30px rgba(0,0,0,0.06)' }}>
+      <h2 style={{ marginTop: 0, color: '#1e3a8a' }}>Registrace</h2>
+      {error && <div style={{ color: '#b91c1c', marginBottom: 12 }}>{error}</div>}
+      <form onSubmit={handleSubmit}>
+        <label>Uživatel</label>
+        <input value={username} onChange={e => setUsername(e.target.value)} required />
+        <label>Heslo</label>
+        <input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+        <button type="submit" style={{ marginTop: 8, padding: '8px 12px', borderRadius: 8, background: '#2563eb', color: '#fff', border: '1px solid #1f4ed8', fontWeight: 600 }}>Vytvořit účet</button>
+      </form>
+    </div>
+  );
+}
+
 function App() {
   return (
     <div className="app-container">
       <GlobalStyles />
       <Routes>
         <Route path="/" element={<EventList />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
         <Route path="/events/:id" element={<EventDetail />} />
-        <Route path="/new-event" element={<NewEvent />} />
-        <Route path="/events/:id/add-expense" element={<AddExpense />} />
+        <Route path="/new-event" element={<ProtectedRoute><NewEvent /></ProtectedRoute>} />
+        <Route path="/events/:id/add-expense" element={<ProtectedRoute><AddExpense /></ProtectedRoute>} />
       </Routes>
     </div>
   );

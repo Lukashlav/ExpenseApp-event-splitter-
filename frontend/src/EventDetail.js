@@ -2,9 +2,30 @@ import React, { useEffect, useState } from 'react';
 import './EventDetail.css';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 
+// --- auth helpers ---
+const getCSRFToken = () => {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(/csrftoken=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
+};
+
+const getAuthHeaders = (isJSON = false) => {
+  const token = localStorage.getItem('token');
+  const headers = {};
+  if (token) headers['Authorization'] = `Token ${token}`; // change to `Bearer` if you switch to JWT
+  if (isJSON) headers['Content-Type'] = 'application/json';
+  const csrf = getCSRFToken();
+  if (csrf) headers['X-CSRFToken'] = csrf;
+  return headers;
+};
+
 function EventDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    navigate('/login');
+  };
   const [event, setEvent] = useState(null);
   const [settlements, setSettlements] = useState(null);
   const [name, setName] = useState('');
@@ -13,6 +34,8 @@ function EventDetail() {
   const handleDeleteExpense = (expenseId) => {
     fetch(`/api/expenses/${expenseId}/`, {
       method: 'DELETE',
+      headers: getAuthHeaders(),
+      credentials: 'include',
     })
       .then(res => {
         if (!res.ok) throw new Error('Failed to delete expense');
@@ -25,24 +48,45 @@ function EventDetail() {
   };
 
   const handleDeleteEvent = () => {
-    fetch(`/api/events/${id}/`, { method: 'DELETE' })
+    fetch(`/api/events/${id}/`, { method: 'DELETE', headers: getAuthHeaders(), credentials: 'include' })
       .then(res => { if (!res.ok) throw new Error('Failed to delete event'); navigate('/'); })
       .catch(console.error);
   };
 
   useEffect(() => {
-    fetch(`/api/events/${id}/`).then(res => res.json()).then(setEvent);
-    fetch(`/api/events/${id}/settlement/`).then(res => res.json()).then(setSettlements);
-  }, [id]);
+    const load = async () => {
+      try {
+        const resEvent = await fetch(`/api/events/${id}/`, { headers: getAuthHeaders(), credentials: 'include' });
+        if (resEvent.status === 401) { navigate('/login'); return; }
+        const dataEvent = await resEvent.json();
+        setEvent(dataEvent);
+
+        const resSet = await fetch(`/api/events/${id}/settlement/`, { headers: getAuthHeaders(), credentials: 'include' });
+        if (resSet.status === 401) { navigate('/login'); return; }
+        const dataSet = await resSet.json();
+        setSettlements(dataSet);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    load();
+  }, [id, navigate]);
 
   const handleAddParticipant = (e) => {
     e.preventDefault();
     fetch(`/api/events/${id}/add_participant/`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      headers: getAuthHeaders(true),
+      credentials: 'include',
       body: JSON.stringify({ name, email }),
     })
-      .then(res => { if (!res.ok) throw new Error('Failed to add participant'); return res.json(); })
+      .then(res => {
+        if (res.status === 401) { navigate('/login'); return null; }
+        if (!res.ok) throw new Error('Failed to add participant');
+        return res.json();
+      })
       .then(newParticipant => {
+        if (!newParticipant) return;
         setEvent(prevEvent => ({ ...prevEvent, participants: [...prevEvent.participants, newParticipant] }));
         setName(''); setEmail('');
       })
@@ -50,7 +94,7 @@ function EventDetail() {
   };
 
   const handleDeleteParticipant = (participantId) => {
-    fetch(`/api/participants/${participantId}/`, { method: 'DELETE' })
+    fetch(`/api/participants/${participantId}/`, { method: 'DELETE', headers: getAuthHeaders(), credentials: 'include' })
       .then(res => { if (!res.ok) throw new Error('Failed to delete participant');
         setEvent(prevEvent => ({ ...prevEvent, participants: prevEvent.participants.filter(p => p.id !== participantId) }));
       })
@@ -61,6 +105,16 @@ function EventDetail() {
 
   return (
     <div className="event-detail-container">
+      <div className="auth-bar" style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginBottom: '8px' }}>
+        {localStorage.getItem('token') ? (
+          <button className="btn" onClick={handleLogout}>Odhlásit</button>
+        ) : (
+          <>
+            <Link className="btn" to="/login">Přihlásit</Link>
+            <Link className="btn" to="/signup">Registrovat</Link>
+          </>
+        )}
+      </div>
       <h2>{event.title}</h2>
       <p>{event.description}</p>
 
