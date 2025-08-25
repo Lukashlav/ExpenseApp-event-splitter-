@@ -1,22 +1,196 @@
+/* Global base (modern look with Poppins) */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+
+:root {
+  --bg: #f2f6fc;
+  --card: #ffffff;
+  --text: #1f2937; /* slate-800 */
+  --muted: #6b7280; /* gray-500 */
+  --primary: #2563eb; /* blue-600 */
+  --primary-700: #1d4ed8; /* blue-700 */
+  --primary-800: #1e40af; /* blue-800 */
+  --border: #e5e7eb; /* gray-200 */
+  --table-stripe: #f8fafc; /* slate-50 */
+  --table-hover: #eef5ff; /* light blue tint */
+  --radius: 12px;
+  --shadow: 0 10px 25px rgba(0,0,0,0.06);
+}
+
+html, body, #root {
+  height: 100%;
+}
+
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background: var(--bg);
+  color: var(--text);
 }
 
 code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
 }
 
+/* App shell alignment: horizontally centered, starts near top with padding */
 .app-container {
   display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh;
-  background-color: #f0f4f8;
   flex-direction: column;
+  align-items: center;          /* horizontal center */
+  justify-content: flex-start;  /* start from top */
+  min-height: 100vh;
+  padding: 32px 16px 64px;      /* top padding for breathing room */
+  background-color: var(--bg);
 }
+
+/* Shared card wrapper used by multiple pages (detail, list, forms) */
+.card {
+  width: 100%;
+  max-width: 980px;
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 24px;
+  border: 1px solid var(--border);
+}
+
+/* Event detail container keeps legacy class but upgrades visuals */
+.event-detail-container {
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;               /* horizontally center */
+  padding: 24px;
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+}
+
+.event-detail-title {
+  font-size: 2.1rem;
+  font-weight: 700;
+  margin: 0 0 18px 0;
+  color: var(--primary-800);
+  text-align: center;
+}
+
+/* Tables (Poppins, compact, responsive-ish) */
+.event-detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  border-radius: 10px;
+  overflow: hidden; /* rounded corners on thead */
+}
+
+.event-detail-table th {
+  background: linear-gradient(90deg, var(--primary) 0%, var(--primary-700) 100%);
+  color: #fff;
+  padding: 14px 16px;
+  text-align: left;
+  font-weight: 600;
+  letter-spacing: .2px;
+}
+
+.event-detail-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+.event-detail-table tr:nth-child(even) {
+  background-color: var(--table-stripe);
+}
+
+.event-detail-table tr:hover {
+  background-color: var(--table-hover);
+}
+
+/* Links & buttons */
+.back-button,
+.button,
+button,
+.btn {
+  display: inline-block;
+  padding: 10px 16px;
+  background-color: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-decoration: none;
+  text-align: center;
+  cursor: pointer;
+  transition: background-color .2s ease, transform .1s ease;
+}
+
+.back-button:hover,
+.button:hover,
+button:hover,
+.btn:hover {
+  background-color: var(--primary-700);
+}
+
+.back-button:active,
+.button:active,
+button:active,
+.btn:active {
+  transform: translateY(1px);
+}
+
+.back-button { margin-top: 16px; }
+
+/* Forms */
+form label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+form input, form select, form textarea {
+  width: 100%;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-sizing: border-box;
+  background: #fff;
+}
+
+form input:focus, form select:focus, form textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+/* Event list (homepage) – safe defaults if component uses these classes */
+.event-list {
+  width: 100%;
+  max-width: 980px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.event-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: var(--shadow);
+}
+
+.event-card h3 {
+  margin: 0 0 8px 0;
+  font-size: 1.15rem;
+  color: var(--primary-800);
+}
+
+.event-card p { margin: 0; color: var(--muted); }
+
+/* Utility spacing */
+.mt-16 { margin-top: 16px; }
+.mt-24 { margin-top: 24px; }
+.mt-32 { margin-top: 32px; }

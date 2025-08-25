@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import './EventDetail.css';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 
 function EventDetail() {
@@ -59,28 +60,28 @@ function EventDetail() {
   if (!event) return <div>Načítám data eventu...</div>;
 
   return (
-    <div>
+    <div className="event-detail-container">
       <h2>{event.title}</h2>
       <p>{event.description}</p>
 
       <h3>Účastníci:</h3>
       <div className="participants-list">
-        <ul>
+        <ul className="participants-list">
           {event.participants?.map(p => (
-            <li key={p.id}>{p?.name || 'Neznámý účastník'} ({p?.email || 'bez emailu'}) <button onClick={() => handleDeleteParticipant(p.id)}>Smazat</button></li>
+            <li key={p.id}>{p?.name || 'Neznámý účastník'} ({p?.email || 'bez emailu'}) <button className="btn" onClick={() => handleDeleteParticipant(p.id)}>Smazat</button></li>
           ))}
         </ul>
       </div>
 
-      <form onSubmit={handleAddParticipant}>
+      <form className="participant-form" onSubmit={handleAddParticipant}>
         <input type="text" placeholder="Jméno" value={name} onChange={e => setName(e.target.value)} required />
         <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
-        <button type="submit">Přidat účastníka</button>
+        <button className="btn" type="submit">Přidat účastníka</button>
       </form>
 
       <h3>Výdaje</h3>
       <div className="table-container">
-        <table className="expenses-table">
+        <table className="event-table">
           <thead>
             <tr>
               <th className="th-description">Popis</th>
@@ -104,24 +105,24 @@ function EventDetail() {
                 </td>
                 <td className="category">{exp.category?.name || "Neznámá"}</td>
                 <td className="actions">
-                  <button onClick={() => handleDeleteExpense(exp.id)}>Smazat</button>
+                  <button className="btn" onClick={() => handleDeleteExpense(exp.id)}>Smazat</button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <Link to={`/events/${id}/add-expense`}>+ Přidat výdaj</Link>
+      <Link className="add-expense-link btn" to={`/events/${id}/add-expense`}>+ Přidat výdaj</Link>
 
       <h3>Kdo komu dluží:</h3>
       {settlements && settlements.length > 0 ? (
-        <ul>{settlements.map((s,i) => <li key={i}>{s.from} dluží {s.to} {s.amount.toFixed(2)} Kč</li>)}</ul>
+        <ul className="settlements-list">{settlements.map((s,i) => <li key={i}>{s.from} dluží {s.to} {s.amount.toFixed(2)} Kč</li>)}</ul>
       ) : (<p>Žádné dluhy k vyrovnání.</p>)}
 
       <br />
-      <button onClick={handleDeleteEvent}>Smazat event</button>
+      <button className="btn delete-event-btn" onClick={handleDeleteEvent}>Smazat event</button>
       <br />
-      <Link to="/">← Zpět na seznam eventů</Link>
+      <Link className="back-link btn" to="/">← Zpět na seznam eventů</Link>
     </div>
   );
 }
