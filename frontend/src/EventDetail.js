@@ -139,37 +139,51 @@ function EventDetail() {
 
   return (
     <div className="event-detail-container">
-      {/* Top action bar */}
-      <div className="auth-bar" style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginBottom: '8px' }}>
-        {isAuthed ? (
-          <button className="btn" onClick={logout}>Odhlásit</button>
-        ) : (
-          <>
-            <Link className="btn" to="/login">Přihlásit</Link>
-            <Link className="btn" to="/signup">Registrovat</Link>
-          </>
-        )}
-      </div>
+      {/* App header */}
+      <header className="app-header">
+        <Link to="/" className="brand">ExpenseApp</Link>
+        <nav className="header-actions">
+          {isAuthed ? (
+            <button className="btn" onClick={logout}>Odhlásit</button>
+          ) : (
+            <>
+              <Link className="btn" to="/login">Přihlásit</Link>
+              <Link className="btn" to="/signup">Registrovat</Link>
+            </>
+          )}
+        </nav>
+      </header>
 
       <h2>{event.title}</h2>
       <p>{event.description}</p>
 
       <h3>Účastníci:</h3>
-      <div className="participants-list">
-        <ul className="participants-list">
-          {event.participants?.map(p => (
-            <li key={p.id}>
+      <ul className="participants-list">
+        {event.participants?.map(p => (
+          <li key={p.id} className="participant-row">
+            <div className="participant-info">
               {p?.name || 'Neznámý účastník'} ({p?.email || 'bez emailu'})
-              <button className="btn" style={{ marginLeft: 8 }} onClick={() => handleDeleteParticipant(p.id)}>Smazat</button>
-            </li>
-          ))}
-        </ul>
-      </div>
+            </div>
+            <button className="btn" onClick={() => handleDeleteParticipant(p.id)}>Smazat</button>
+          </li>
+        ))}
+      </ul>
 
       <form className="participant-form" onSubmit={handleAddParticipant}>
-        <input type="text" placeholder="Jméno" value={name} onChange={e => setName(e.target.value)} required />
-        <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
-        <button className="btn" type="submit">Přidat účastníka</button>
+        <div className="form-row">
+          <label>
+            Jméno
+            <input type="text" placeholder="Např. Karel" value={name} onChange={e => setName(e.target.value)} required />
+          </label>
+          <label className="inline-label">
+            <span className="label-title">Email <span className="muted">(volitelné)</span></span>
+            <input type="email" placeholder="napr. karel@example.com" value={email} onChange={e => setEmail(e.target.value)} />
+          </label>
+          <div className="form-actions">
+            <button className="btn primary" type="submit">+ Přidat</button>
+          </div>
+        </div>
+        <p className="form-hint">Účastníky můžeš přidat i bez emailu a doplnit později.</p>
       </form>
 
       <h3>Výdaje</h3>
