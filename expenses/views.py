@@ -2,6 +2,7 @@ from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth import authenticate, login, logout
 from django.shortcuts import render, redirect
 from django.shortcuts import get_object_or_404
+from django.http import JsonResponse
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -9,7 +10,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes
 from django.contrib.auth.models import User
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from rest_framework.permissions import AllowAny
 from .models import Event, Participant, Expense, Category
 from .serializers import EventSerializer, ParticipantSerializer, ExpenseSerializer, CategorySerializer
@@ -37,7 +38,7 @@ class EventViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def add_participant(self, request, pk=None):
-        """Create a participant inside this event (auth required by viewset)."""
+        """Create a participant inside this event (auth required via session + CSRF)."""
         event = self.get_object()
         form = ParticipantForm(request.data)
         if form.is_valid():
@@ -48,11 +49,31 @@ class EventViewSet(viewsets.ModelViewSet):
             return Response(serializer.data, status=201)
         return Response(form.errors, status=400)
 
+
 class ParticipantViewSet(viewsets.ModelViewSet):
     """CRUD for participants; reads public, writes require auth."""
     queryset = Participant.objects.all()
     serializer_class = ParticipantSerializer
     permission_classes = [IsAuthenticatedOrReadOnly]
+
+
+# Delete participant endpoint (auth required)
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def delete_participant(request, pk):
+    """Delete a participant by primary key (auth required)."""
+    participant = get_object_or_404(Participant, pk=pk)
+    participant.delete()
+    return Response(status=204)
+
+# Delete event endpoint (auth required)
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def delete_event(request, event_id):
+    """Delete an event by primary key (auth required)."""
+    event = get_object_or_404(Event, pk=event_id)
+    event.delete()
+    return Response(status=204)
 
 class ExpenseViewSet(viewsets.ModelViewSet):
     """CRUD for expenses; reads public, writes require auth."""
@@ -103,24 +124,16 @@ class CategoryViewSet(viewsets.ModelViewSet):
     serializer_class = CategorySerializer
     permission_classes = [IsAuthenticatedOrReadOnly]
 
-@api_view(["DELETE"])
-@permission_classes([IsAuthenticated])
-def delete_participant(request, pk):
-    """Delete a participant by ID (auth required)."""
-    participant = get_object_or_404(Participant, pk=pk)
-    participant.delete()
-    return Response({"status": "deleted"})
-
-@api_view(["DELETE"])
-@permission_classes([IsAuthenticated])
-def delete_event(request, event_id):
-    """Delete an event by ID (auth required)."""
-    event = get_object_or_404(Event, pk=event_id)
-    event.delete()
-    return Response({"status": "deleted"})
+@api_view(["GET"])
+@permission_classes([AllowAny])
+@ensure_csrf_cookie
+def api_csrf(request):
+    """
+    Issue a CSRF cookie for the client; call this once from the frontend before POSTs.
+    """
+    return Response({"detail": "CSRF cookie set"}, status=200)
 
 # API endpoints for user registration and authentication
-@csrf_exempt  # DEV ONLY: we'll replace with proper CSRF handling later
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def api_signup(request):
@@ -137,7 +150,6 @@ def api_signup(request):
     User.objects.create_user(username=username, password=password)
     return Response({"detail": "OK"}, status=201)
 
-@csrf_exempt  # DEV ONLY: we'll replace with proper CSRF handling later
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def api_login(request):
@@ -154,22 +166,30 @@ def api_login(request):
     return Response({"detail": "OK"}, status=200)
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def api_logout(request):
     """
-    API endpoint to log out the current user.
+    API endpoint to log out the current user (requires session + CSRF).
     """
     logout(request)
     return Response({"detail": "OK"}, status=200)
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
+@ensure_csrf_cookie
 def api_me(request):
     """
-    Returns current session user info (or null if anonymous).
+    Returns current session user info and auth flag (and sets CSRF cookie).
     """
     if request.user.is_authenticated:
-        return Response({"username": request.user.username}, status=200)
-    return Response({"username": None}, status=200)
+        return Response({
+            "authenticated": True,
+            "username": request.user.username,
+        }, status=200)
+    return Response({
+        "authenticated": False,
+        "username": None,
+    }, status=200)
 
 # Signup view for user registration
 def signup_view(request):

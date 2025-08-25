@@ -1,40 +1,42 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-
-// API base (can be overridden by REACT_APP_API_BASE)
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:8000';
-
-// Read CSRF token from cookies (for Django session-auth)
-function getCSRFToken() {
-  if (typeof document === 'undefined') return null;
-  const match = document.cookie.match(/csrftoken=([^;]+)/);
-  return match ? decodeURIComponent(match[1]) : null;
-}
-
-// Helper: build headers incl. auth token & CSRF if present
-function getAuthHeaders() {
-  const headers = { 'Content-Type': 'application/json' };
-  const token = localStorage.getItem('authToken');
-  if (token) {
-    // If you use DRF TokenAuth -> `Token ${token}`; if JWT -> `Bearer ${token}`
-    headers['Authorization'] = `Token ${token}`;
-  }
-  const csrf = getCSRFToken();
-  if (csrf) {
-    headers['X-CSRFToken'] = csrf;
-  }
-  return headers;
-}
+import { apiFetch, api } from './api';
 
 function NewEvent() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [isAuthed, setIsAuthed] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    localStorage.removeItem('authToken');
+  // On mount, check session ("/api/me/")
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const me = await api.me();
+        if (!mounted) return;
+        const authed = !!me?.authenticated;
+        setIsAuthed(authed);
+        setAuthChecked(true);
+        if (!authed) {
+          navigate('/login');
+        }
+      } catch (e) {
+        if (!mounted) return;
+        setIsAuthed(false);
+        setAuthChecked(true);
+        navigate('/login');
+      }
+    })();
+    return () => { mounted = false; };
+  }, [navigate]);
+
+  const handleLogout = async () => {
+    await api.logout();
+    setIsAuthed(false);
     navigate('/login');
   };
 
@@ -44,36 +46,18 @@ function NewEvent() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_BASE}/api/events/`, {
+      const data = await apiFetch('/api/events/', {
         method: 'POST',
-        credentials: 'include',        // send cookies for session auth
-        mode: 'cors',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ title, description })
+        body: { title, description },
       });
-
-      if (res.status === 401) {
-        // not authenticated 
+      navigate(`/events/${data.id}`);
+    } catch (err) {
+      if (err && (err.status === 401 || err.status === 403)) {
         navigate('/login');
         return;
       }
-
-      if (!res.ok) {
-        let message = 'Chyba při vytváření eventu';
-        try {
-          const dataErr = await res.json();
-          message = typeof dataErr === 'string' ? dataErr : JSON.stringify(dataErr);
-        } catch (e) {
-          const txt = await res.text();
-          if (txt) message = txt;
-        }
-        throw new Error(message);
-      }
-
-      const data = await res.json();
-      navigate(`/events/${data.id}`);
-    } catch (err) {
-      setError(err.message);
+      const msg = err?.data?.detail || (typeof err?.data === 'string' ? err.data : err?.message) || 'Chyba při vytváření eventu';
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -82,10 +66,10 @@ function NewEvent() {
   return (
     <div style={{ maxWidth: '960px', margin: '48px auto 80px', padding: 24, background: '#fff', borderRadius: 12, boxShadow: '0 10px 30px rgba(0,0,0,0.06)', fontFamily: 'Poppins, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif' }}>
       {/* mini top bar */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#1e3a8a' }}>Nový event</h1>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          {localStorage.getItem('authToken') ? (
+          {authChecked && isAuthed ? (
             <button onClick={handleLogout} style={{ padding: '6px 12px', background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 10, cursor: 'pointer', fontWeight: 600, color: '#1e3a8a' }}>Odhlásit</button>
           ) : (
             <>

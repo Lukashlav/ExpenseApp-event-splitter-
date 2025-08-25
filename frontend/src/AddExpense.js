@@ -1,18 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { apiFetch, api } from './api';
+
 // Styles for this form are injected at the bottom of the component
-
-// Configurable backend base URL (falls back to Django dev server)
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:8000';
-
-// Read a cookie value (for CSRF)
-function getCookie(name) {
-  if (typeof document === 'undefined') return null;
-  const value = `; ${document.cookie}`;
-  const parts = value.split(`; ${name}=`);
-  if (parts.length === 2) return parts.pop().split(';').shift();
-  return null;
-}
 
 function AddExpense() {
   const { id } = useParams(); // event ID
@@ -25,38 +15,31 @@ function AddExpense() {
   const [categories, setCategories] = useState([]);
   const [category, setCategory] = useState('');
   const [error, setError] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const headers = { 'Accept': 'application/json' };
-    if (token) headers['Authorization'] = `Token ${token}`;
-
-    // Load event (participants)
-    fetch(`${API_BASE}/api/events/${id}/`, {
-      credentials: 'include',
-      headers,
-    })
-      .then(res => res.ok ? res.json() : Promise.reject(res))
-      .then(data => setParticipants(data.participants || []))
-      .catch(async (res) => {
-        let msg = 'Nepodařilo se načíst účastníky.';
-        try { msg = await res.text(); } catch {}
-        setError(msg);
-      });
-
-    // Load categories
-    fetch(`${API_BASE}/api/categories/`, {
-      credentials: 'include',
-      headers,
-    })
-      .then(res => res.ok ? res.json() : Promise.reject(res))
-      .then(data => setCategories(Array.isArray(data) ? data : []))
-      .catch(async (res) => {
-        let msg = 'Nepodařilo se načíst kategorie.';
-        try { msg = await res.text(); } catch {}
-        setError(msg);
-      });
+    (async () => {
+      setError(null);
+      try {
+        // Load event (participants)
+        const data = await apiFetch(`/api/events/${id}/`);
+        const list = data.participants || [];
+        setParticipants(list);
+        if (selectAll) {
+          setSelectedParticipants(list.map(p => p.id));
+        }
+      } catch (e) {
+        setError('Nepodařilo se načíst účastníky.');
+      }
+      try {
+        // Load categories
+        const cats = await apiFetch('/api/categories/');
+        setCategories(Array.isArray(cats) ? cats : []);
+      } catch (e) {
+        setError('Nepodařilo se načíst kategorie.');
+      }
+    })();
   }, [id]);
 
   const handleCheckboxChange = (participantId) => {
@@ -80,45 +63,38 @@ function AddExpense() {
     e.preventDefault();
     setError(null);
 
+    // If "Vsem ucastnikum" is checked or nic neni vybrano, pouzij vsechny ucastniky
+    const recipients = (selectAll || selectedParticipants.length === 0)
+      ? participants.map(p => p.id)
+      : selectedParticipants;
+
+    // Basic validation
+    const amt = parseFloat(amount);
+    if (Number.isNaN(amt) || amt <= 0) {
+      setError('Zadejte kladnou částku.');
+      return;
+    }
+    if (!paidBy) {
+      setError('Vyberte, kdo platil.');
+      return;
+    }
+
     const payload = {
       description,
-      amount: parseFloat(amount),
-      payer: Number(paidBy), // backend očekává pole `payer`
+      amount: amt,
+      payer: Number(paidBy),
       event: Number(id),
-      split_between_ids: selectedParticipants.map(Number),
-      category: category ? Number(category) : null,
+      split_between_ids: recipients.map(Number),
     };
+    if (category) payload.category = Number(category);
 
-    const token = localStorage.getItem('token');
-    const headers = {
-      'Content-Type': 'application/json',
-      'X-CSRFToken': getCookie('csrftoken') || '',
-    };
-    if (token) headers['Authorization'] = `Token ${token}`;
-
-    fetch(`${API_BASE}/api/expenses/`, {
-      method: 'POST',
-      credentials: 'include',
-      headers,
-      body: JSON.stringify(payload),
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          // Hezčí hlášky pro 401/403 a JSON/text fallback
-          if (res.status === 401 || res.status === 403) {
-            throw new Error('Nejste přihlášen. Přihlaste se prosím a zkuste to znovu.');
-          }
-          try {
-            const data = await res.json();
-            throw new Error(JSON.stringify(data));
-          } catch {
-            const text = await res.text();
-            throw new Error(text || 'Chyba při přidávání výdaje');
-          }
-        }
-        return res.json();
-      })
-      .then(() => {
+    setIsSubmitting(true);
+    (async () => {
+      try {
+        await apiFetch('/api/expenses/', {
+          method: 'POST',
+          body: payload,
+        });
         setDescription('');
         setAmount('');
         setPaidBy('');
@@ -126,8 +102,19 @@ function AddExpense() {
         setSelectAll(false);
         setCategory('');
         navigate(`/events/${id}`);
-      })
-      .catch(err => setError(err.message));
+      } catch (err) {
+        // Redirect to login if unauthorized/forbidden
+        if (err && (err.status === 401 || err.status === 403)) {
+          navigate('/login');
+          setError('Nejste přihlášen. Přihlaste se prosím a zkuste to znovu.');
+          return;
+        }
+        const detail = err?.data?.detail || (typeof err?.data === 'string' ? err.data : err?.message) || 'Chyba při přidávání výdaje';
+        setError(detail);
+      } finally {
+        setIsSubmitting(false);
+      }
+    })();
   };
 
   return (
@@ -218,7 +205,9 @@ function AddExpense() {
           </div>
 
           <div className="actions">
-            <button type="submit" className="primary-btn">Přidat výdaj</button>
+            <button type="submit" className="primary-btn" disabled={isSubmitting}>
+              {isSubmitting ? 'Ukládám…' : 'Přidat výdaj'}
+            </button>
           </div>
         </form>
       </div>
@@ -375,6 +364,11 @@ function AddExpense() {
 
         .primary-btn:hover { background: #1e40af; box-shadow: 0 10px 24px rgba(30, 64, 175, 0.28); }
         .primary-btn:active { transform: translateY(1px); }
+        .primary-btn[disabled] {
+          opacity: 0.6;
+          cursor: not-allowed;
+          box-shadow: none;
+        }
 
         @media (max-width: 720px) {
           .form-grid { grid-template-columns: 1fr; }

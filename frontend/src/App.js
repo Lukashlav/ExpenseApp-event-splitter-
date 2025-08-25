@@ -4,6 +4,17 @@ import { Routes, Route, Link, Navigate, useNavigate } from 'react-router-dom';
 import EventDetail from './EventDetail';
 import NewEvent from './NewEvent';
 import AddExpense from './AddExpense';
+import { apiFetch, api } from './api';
+
+console.log('[App] loaded');
+
+function DebugBanner() {
+  return (
+    <div style={{position:'fixed',top:8,left:8,padding:'6px 10px',border:'1px solid #ddd',background:'#fff',zIndex:9999}}>
+      App shell loaded ✅
+    </div>
+  );
+}
 
 function GlobalStyles() {
   return (
@@ -23,31 +34,28 @@ function GlobalStyles() {
   );
 }
 
-// ---- Simple auth helpers (token stored in localStorage) ----
-const AUTH_KEY = 'authToken';
-const getToken = () => localStorage.getItem(AUTH_KEY);
-const setToken = (t) => localStorage.setItem(AUTH_KEY, t);
-const clearToken = () => localStorage.removeItem(AUTH_KEY);
+function useAuth() {
+  const [isAuthed, setIsAuthed] = React.useState(null); // null = loading
+  React.useEffect(() => {
+    api.me()
+      .then(data => setIsAuthed(!!data.authenticated))
+      .catch(() => setIsAuthed(false));
+  }, []);
+  return isAuthed;
+}
 
 function AuthBar() {
   const navigate = useNavigate();
-  const [token, setTok] = React.useState(getToken());
+  const isAuthed = useAuth();
 
-  React.useEffect(() => {
-    const onStorage = () => setTok(getToken());
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
-
-  const onLogout = () => {
-    clearToken();
-    setTok(null);
-    navigate('/');
+  const onLogout = async () => {
+    try { await api.logout(); } catch (e) {}
+    navigate(0); // reload the page to refresh auth-based UI
   };
 
   return (
     <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
-      {token ? (
+      {isAuthed ? (
         <button onClick={onLogout} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#f8fafc', cursor: 'pointer', fontWeight: 600 }}>Odhlásit</button>
       ) : (
         <div style={{ display: 'flex', gap: 12 }}>
@@ -61,8 +69,9 @@ function AuthBar() {
 
 // Guard for protected routes
 function ProtectedRoute({ children }) {
-  const token = getToken();
-  if (!token) return <Navigate to="/login" replace />;
+  const isAuthed = useAuth();
+  if (isAuthed === null) return <div style={{padding:24}}>Loading…</div>;
+  if (!isAuthed) return <Navigate to="/login" replace />;
   return children;
 }
 
@@ -70,10 +79,18 @@ function EventList() {
   const [events, setEvents] = React.useState([]);
 
   React.useEffect(() => {
-    fetch('/api/events/')
-      .then(res => res.json())
-      .then(data => setEvents(data.results || data))
-      .catch(() => setEvents([]));
+    let mounted = true;
+    (async () => {
+      try {
+        const data = await apiFetch('/api/events/');
+        if (!mounted) return;
+        setEvents(Array.isArray(data) ? data : (data?.results || []));
+      } catch (e) {
+        if (!mounted) return;
+        setEvents([]);
+      }
+    })();
+    return () => { mounted = false; };
   }, []);
 
   const styles = {
@@ -243,17 +260,7 @@ function Login() {
     e.preventDefault();
     setError('');
     try {
-      const res = await fetch('/api/login/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || 'Přihlášení selhalo');
-      }
-      const data = await res.json();
-      if (data.token) setToken(data.token);
+      await api.login({ username, password });
       navigate('/');
     } catch (err) {
       setError(err.message);
@@ -286,16 +293,7 @@ function Signup() {
     e.preventDefault();
     setError('');
     try {
-      const res = await fetch('/api/signup/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || 'Registrace selhala');
-      }
-      // Auto-redirect to login; alternatively, if backend returns token, call setToken and go home
+      await api.signup({ username, password });
       navigate('/login');
     } catch (err) {
       setError(err.message);
@@ -318,6 +316,16 @@ function Signup() {
 }
 
 function App() {
+  React.useEffect(() => {
+    (async () => {
+      try {
+        await api.csrf();
+      } catch (e) {
+        console.warn('CSRF bootstrap failed', e);
+      }
+    })();
+  }, []);
+
   return (
     <div className="app-container">
       <GlobalStyles />

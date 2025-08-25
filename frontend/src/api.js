@@ -7,11 +7,20 @@ const getCookie = (name) => {
 
 const csrftoken = () => getCookie('csrftoken');
 
-export async function apiFetch(path, { method = 'GET', body, headers } = {}) {
+export async function ensureCsrf() {
+  // If we already have a csrftoken cookie, nothing to do
+  if (csrftoken()) return csrftoken();
+  // Hit Django endpoint that sets the CSRF cookie
+  await fetch('/api/csrf/', { credentials: 'include' });
+  return csrftoken();
+}
+
+export async function apiFetch(path, { method = 'GET', body, headers, _retry = false } = {}) {
   const opts = {
     method,
     headers: {
       'Accept': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
       ...(body ? { 'Content-Type': 'application/json' } : {}),
       ...headers,
     },
@@ -19,7 +28,13 @@ export async function apiFetch(path, { method = 'GET', body, headers } = {}) {
     credentials: 'include',
   };
 
-  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method.toUpperCase())) {
+  const upper = method.toUpperCase();
+
+  // U mutujících metod zajistíme CSRF cookie a přidáme hlavičku
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(upper)) {
+    if (!csrftoken()) {
+      await ensureCsrf();
+    }
     opts.headers['X-CSRFToken'] = csrftoken();
   }
 
@@ -28,11 +43,28 @@ export async function apiFetch(path, { method = 'GET', body, headers } = {}) {
   }
 
   const res = await fetch(path, opts);
-
-  // přesměrování na login (Django vrátí HTML) – ošetřeno
   const contentType = res.headers.get('content-type') || '';
+
+  // Pokud CSRF selže (403), jednou zkusíme obnovit CSRF a retrynout
+  if (res.status === 403 && !_retry) {
+    await ensureCsrf();
+    // Aktualizujeme CSRF hlavičku a retry
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(upper)) {
+      opts.headers['X-CSRFToken'] = csrftoken();
+    }
+    const retryRes = await fetch(path, opts);
+    return handleResponse(retryRes);
+  }
+
+  return handleResponse(res);
+}
+
+async function handleResponse(res) {
+  if (res.status === 204) return null;
+
+  const contentType = res.headers.get('content-type') || '';
+
   if (!res.ok) {
-    // Zkus JSON, když ne, vyhoď text
     if (contentType.includes('application/json')) {
       const data = await res.json();
       throw { status: res.status, data };
@@ -47,3 +79,11 @@ export async function apiFetch(path, { method = 'GET', body, headers } = {}) {
   }
   return await res.text();
 }
+
+export const api = {
+  csrf: ensureCsrf,
+  signup: (payload) => apiFetch('/api/signup/', { method: 'POST', body: payload }),
+  login: (payload) => apiFetch('/api/login/', { method: 'POST', body: payload }),
+  logout: () => apiFetch('/api/logout/', { method: 'POST' }),
+  me: () => apiFetch('/api/me/'),
+};
