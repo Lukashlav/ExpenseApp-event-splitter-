@@ -200,7 +200,10 @@ function EventList() {
   return (
     <div style={styles.container}>
       <div style={styles.headerRow}>
-        <h1 style={styles.title}>ExpenseApp</h1>
+        <h1 style={{ ...styles.title, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <img src="/expense.ico" alt="logo" style={{ width: 36, height: 36 }} />
+          <span>ExpenseApp <span style={{ fontFamily: 'cursive', fontWeight: 400, fontSize: 22, color: '#475569' }}>– event splitter</span></span>
+        </h1>
         <div style={styles.toolbar}>
           <AuthBar />
           <Link
