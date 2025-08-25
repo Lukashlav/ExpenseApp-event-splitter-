@@ -1,27 +1,32 @@
+"""
+Models for the ExpenseApp application.
+Defines entities for categories, events, participants, expenses, and settlements.
+"""
 from django.db import models
 import uuid
 from decimal import Decimal, ROUND_HALF_UP
 
 class Category(models.Model):
+    """Represents an expense category (e.g., Food, Travel)."""
     name = models.CharField(max_length=100, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
+        """Return human-readable string representation of the category."""
         return self.name
 
 class Event(models.Model):
+    """Represents an event that groups participants and expenses."""
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
+        """Return human-readable string representation of the event."""
         return self.title
     
     def get_balance(self):
-        """
-        Vrací dict {participant_id: balance}
-        Kladná hodnota = má dostat peníze, záporná = dluží.
-        """
+        """Return a dict mapping participant_id to balance (positive = to receive, negative = owes)."""
         balances = {p.id: 0 for p in self.participants.all()}
 
         for expense in self.expenses.all():
@@ -44,10 +49,7 @@ class Event(models.Model):
         return balances
     
     def get_settlement(self):
-        """
-        Vrátí seznam plateb, které vyrovnají dluhy.
-        Výstup je list dictů: {"from": participant_name, "to": participant_name, "amount": float}
-        """
+        """Return a list of settlement transactions to balance debts among participants."""
         balances = self.get_balance()
         creditors = []
         debtors = []
@@ -97,6 +99,7 @@ class Event(models.Model):
         
 
 class Participant(models.Model):
+    """Represents a participant of an event."""
     event = models.ForeignKey(Event, related_name="participants", on_delete=models.CASCADE)
     name = models.CharField(max_length=120)
     email = models.EmailField(blank=True)
@@ -104,9 +107,11 @@ class Participant(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
+        """Return human-readable string representation of the participant."""
         return f"{self.name} ({self.event.title})"
 
 class Expense(models.Model):
+    """Represents a single expense paid by a participant and split among others."""
     description = models.CharField(max_length=255)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     payer = models.ForeignKey(Participant, on_delete=models.CASCADE, related_name='paid_expenses')
@@ -116,10 +121,12 @@ class Expense(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
+        """Return human-readable string representation of the expense."""
         return f"{self.description} - {self.amount} ({self.event.title})"
 
 
 class Settlement(models.Model):
+    """Represents a settlement payment between two participants of an event."""
     event = models.ForeignKey(Event, related_name="settlements", on_delete=models.CASCADE)
     from_participant = models.ForeignKey(Participant, related_name="settlements_from", on_delete=models.CASCADE)
     to_participant = models.ForeignKey(Participant, related_name="settlements_to", on_delete=models.CASCADE)
@@ -127,4 +134,5 @@ class Settlement(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
+        """Return human-readable string representation of the settlement."""
         return f"{self.from_participant.name} → {self.to_participant.name}: {self.amount} Kč"
