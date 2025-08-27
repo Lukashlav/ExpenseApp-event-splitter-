@@ -3,6 +3,10 @@ Models for the ExpenseApp application.
 Defines entities for categories, events, participants, expenses, and settlements.
 """
 from django.db import models
+from django.core.validators import MinValueValidator
+from django.core.exceptions import ValidationError
+from django.dispatch import receiver
+from django.db.models.signals import m2m_changed
 import uuid
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -20,6 +24,12 @@ class Event(models.Model):
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["created_at"]),
+        ]
 
     def __str__(self):
         """Return human-readable string representation of the event."""
@@ -39,6 +49,8 @@ class Event(models.Model):
                 participants_to_split = self.participants.all()
 
             split_count = participants_to_split.count()
+            if split_count == 0:
+                continue
             share = expense.amount / split_count
 
             for participant in participants_to_split:
@@ -106,6 +118,25 @@ class Participant(models.Model):
     token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    def clean(self):
+        super().clean()
+        if self.name:
+            self.name = self.name.strip()
+        if not self.name:
+            raise ValidationError({"name": "Jméno účastníka nesmí být prázdné."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["event", "name"], name="unique_participant_name_per_event"),
+        ]
+        indexes = [
+            models.Index(fields=["event"]),
+        ]
+
     def __str__(self):
         """Return human-readable string representation of the participant."""
         return f"{self.name} ({self.event.title})"
@@ -113,25 +144,79 @@ class Participant(models.Model):
 class Expense(models.Model):
     """Represents a single expense paid by a participant and split among others."""
     description = models.CharField(max_length=255)
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
     payer = models.ForeignKey(Participant, on_delete=models.CASCADE, related_name='paid_expenses')
     event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='expenses')
     split_between = models.ManyToManyField(Participant, related_name='shared_expenses', blank=True)
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name="expenses")
     created_at = models.DateTimeField(auto_now_add=True)
 
+    def clean(self):
+        super().clean()
+        if self.payer and self.event and self.payer.event_id != self.event_id:
+            raise ValidationError({"payer": "Plátce musí patřit do stejné události."})
+        if self.pk:  # when instance exists, we can validate current M2M set
+            for participant in self.split_between.all():
+                if participant.event_id != self.event_id:
+                    raise ValidationError({"split_between": "Všichni účastníci ve splitu musí patřit do stejné události."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=models.Q(amount__gt=0), name="expense_amount_gt_0"),
+        ]
+        indexes = [
+            models.Index(fields=["event"]),
+            models.Index(fields=["-created_at"]),
+        ]
+
     def __str__(self):
         """Return human-readable string representation of the expense."""
         return f"{self.description} - {self.amount} ({self.event.title})"
 
+
+@receiver(m2m_changed, sender=Expense.split_between.through)
+def validate_split_between(sender, instance, action, reverse, model, pk_set, **kwargs):
+    if action in {"pre_add", "pre_set"} and pk_set:
+        # All participants must belong to the same event as the expense
+        invalid = model.objects.filter(pk__in=pk_set).exclude(event_id=instance.event_id).exists()
+        if invalid:
+            raise ValidationError("Účastníci ve splitu musí patřit do stejné události jako výdaj.")
 
 class Settlement(models.Model):
     """Represents a settlement payment between two participants of an event."""
     event = models.ForeignKey(Event, related_name="settlements", on_delete=models.CASCADE)
     from_participant = models.ForeignKey(Participant, related_name="settlements_from", on_delete=models.CASCADE)
     to_participant = models.ForeignKey(Participant, related_name="settlements_to", on_delete=models.CASCADE)
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def clean(self):
+        super().clean()
+        if self.from_participant_id and self.to_participant_id and self.from_participant_id == self.to_participant_id:
+            raise ValidationError({"to_participant": "Plátce a příjemce nesmí být stejná osoba."})
+        if self.event_id:
+            if self.from_participant and self.from_participant.event_id != self.event_id:
+                raise ValidationError({"from_participant": "Plátce musí patřit do stejné události."})
+            if self.to_participant and self.to_participant.event_id != self.event_id:
+                raise ValidationError({"to_participant": "Příjemce musí patřit do stejné události."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=models.Q(amount__gt=0), name="settlement_amount_gt_0"),
+            models.CheckConstraint(condition=~models.Q(from_participant=models.F("to_participant")), name="settlement_from_not_to"),
+        ]
+        indexes = [
+            models.Index(fields=["event"]),
+            models.Index(fields=["-created_at"]),
+        ]
 
     def __str__(self):
         """Return human-readable string representation of the settlement."""

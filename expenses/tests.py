@@ -276,3 +276,227 @@ def test_delete_event_ok(client):
     event_id = r_event.json()["id"]
     r_del = client.delete(reverse("delete_event", kwargs={"event_id": event_id}))
     assert r_del.status_code == 204
+
+
+@pytest.mark.django_db
+def test_participant_name_trim_and_not_empty(client):
+    """Trims whitespace and rejects empty participant name."""
+    # login and create event
+    User.objects.create_user("luke", password="secret")
+    assert jpost(client, "api_login", {"username": "luke", "password": "secret"}).status_code == 200
+    r_event = client.post(
+        reverse("event-list"),
+        data=json.dumps({"title": "Trip", "description": "X"}),
+        content_type="application/json",
+    )
+    event_id = r_event.json()["id"]
+
+    # whitespace name -> should be trimmed
+    r = client.post(
+        reverse("event-add-participant", args=[event_id]),
+        data=json.dumps({"name": "  Karel  ", "email": "k@example.com"}),
+        content_type="application/json",
+    )
+    assert r.status_code in (200, 201)
+    assert r.json()["name"] == "Karel"
+
+    # empty/whitespace only -> 400
+    r2 = client.post(
+        reverse("event-add-participant", args=[event_id]),
+        data=json.dumps({"name": "   ", "email": "x@example.com"}),
+        content_type="application/json",
+    )
+    assert r2.status_code == 400
+    body = r2.json()
+    # Either field-specific or non-field errors depending on form binding
+    assert ("name" in body) or ("non_field_errors" in body)
+
+
+@pytest.mark.django_db
+def test_participant_unique_name_per_event(client):
+    """Same name cannot be added twice within the same event, but can in different events."""
+    User.objects.create_user("luke", password="secret")
+    assert jpost(client, "api_login", {"username": "luke", "password": "secret"}).status_code == 200
+
+    # Create two events
+    r1 = client.post(
+        reverse("event-list"),
+        data=json.dumps({"title": "Trip A", "description": "X"}),
+        content_type="application/json",
+    )
+    r2 = client.post(
+        reverse("event-list"),
+        data=json.dumps({"title": "Trip B", "description": "Y"}),
+        content_type="application/json",
+    )
+    e1, e2 = r1.json()["id"], r2.json()["id"]
+
+    # Add Karel twice to event A -> second should fail with 400
+    ok = client.post(
+        reverse("event-add-participant", args=[e1]),
+        data=json.dumps({"name": "Karel", "email": "k1@example.com"}),
+        content_type="application/json",
+    )
+    assert ok.status_code in (200, 201)
+    dup = client.post(
+        reverse("event-add-participant", args=[e1]),
+        data=json.dumps({"name": "Karel", "email": "k2@example.com"}),
+        content_type="application/json",
+    )
+    assert dup.status_code == 400
+
+    # But adding Karel to event B is OK
+    ok2 = client.post(
+        reverse("event-add-participant", args=[e2]),
+        data=json.dumps({"name": "Karel", "email": "k3@example.com"}),
+        content_type="application/json",
+    )
+    assert ok2.status_code in (200, 201)
+
+
+@pytest.mark.django_db
+def test_expense_amount_must_be_positive(client):
+    """Expense amount must be > 0 (model + serializer + DB check)."""
+    User.objects.create_user("luke", password="secret")
+    assert jpost(client, "api_login", {"username": "luke", "password": "secret"}).status_code == 200
+
+    # Event + participants
+    r_event = client.post(
+        reverse("event-list"),
+        data=json.dumps({"title": "Trip", "description": "X"}),
+        content_type="application/json",
+    )
+    event_id = r_event.json()["id"]
+    pa = client.post(
+        reverse("event-add-participant", args=[event_id]),
+        data=json.dumps({"name": "A", "email": "a@example.com"}),
+        content_type="application/json",
+    ).json()
+
+    # amount = 0 -> 400
+    r0 = client.post(
+        reverse("expense-list"),
+        data=json.dumps({
+            "description": "Lunch",
+            "amount": 0,
+            "event": event_id,
+            "payer": pa["id"],
+            "split_between_ids": [pa["id"]],
+        }),
+        content_type="application/json",
+    )
+    assert r0.status_code == 400
+    assert "amount" in r0.json()
+
+    # amount > 0 -> OK
+    r_ok = client.post(
+        reverse("expense-list"),
+        data=json.dumps({
+            "description": "Lunch",
+            "amount": 123.45,
+            "event": event_id,
+            "payer": pa["id"],
+            "split_between_ids": [pa["id"]],
+        }),
+        content_type="application/json",
+    )
+    assert r_ok.status_code in (200, 201)
+
+
+@pytest.mark.django_db
+def test_expense_payer_must_belong_to_event(client):
+    """Payer must be a participant of the same event."""
+    User.objects.create_user("luke", password="secret")
+    assert jpost(client, "api_login", {"username": "luke", "password": "secret"}).status_code == 200
+
+    # Two events
+    e1 = client.post(
+        reverse("event-list"),
+        data=json.dumps({"title": "E1", "description": "X"}),
+        content_type="application/json",
+    ).json()["id"]
+    e2 = client.post(
+        reverse("event-list"),
+        data=json.dumps({"title": "E2", "description": "Y"}),
+        content_type="application/json",
+    ).json()["id"]
+
+    # Participant in E2 only
+    p2 = client.post(
+        reverse("event-add-participant", args=[e2]),
+        data=json.dumps({"name": "B", "email": "b@example.com"}),
+        content_type="application/json",
+    ).json()
+
+    # Try to create expense in E1 with payer from E2 -> 400
+    r = client.post(
+        reverse("expense-list"),
+        data=json.dumps({
+            "description": "Bad payer",
+            "amount": 10,
+            "event": e1,
+            "payer": p2["id"],
+            "split_between_ids": [],
+        }),
+        content_type="application/json",
+    )
+    assert r.status_code == 400
+    body = r.json()
+    assert "payer" in body
+
+
+@pytest.mark.django_db
+def test_expense_split_between_must_belong_to_event(client):
+    """All split participants must belong to the same event as the expense."""
+    User.objects.create_user("luke", password="secret")
+    assert jpost(client, "api_login", {"username": "luke", "password": "secret"}).status_code == 200
+
+    # Two events with one participant each
+    e1 = client.post(
+        reverse("event-list"),
+        data=json.dumps({"title": "E1", "description": "X"}),
+        content_type="application/json",
+    ).json()["id"]
+    e2 = client.post(
+        reverse("event-list"),
+        data=json.dumps({"title": "E2", "description": "Y"}),
+        content_type="application/json",
+    ).json()["id"]
+
+    p1 = client.post(
+        reverse("event-add-participant", args=[e1]),
+        data=json.dumps({"name": "A", "email": "a@example.com"}),
+        content_type="application/json",
+    ).json()
+    p2 = client.post(
+        reverse("event-add-participant", args=[e2]),
+        data=json.dumps({"name": "B", "email": "b@example.com"}),
+        content_type="application/json",
+    ).json()
+
+    # Try to create expense in E1 split between A (ok) and B (wrong event) -> 400
+    r = client.post(
+        reverse("expense-list"),
+        data=json.dumps({
+            "description": "Split cross-event",
+            "amount": 10,
+            "event": e1,
+            "payer": p1["id"],
+            "split_between_ids": [p1["id"], p2["id"]],
+        }),
+        content_type="application/json",
+    )
+    assert r.status_code == 400
+    body = r.json()
+    # We expect the serializer/view to expose `split_between_ids`
+    assert "split_between_ids" in body
+
+
+@pytest.mark.django_db
+def test_api_404_returns_json(client):
+    """Unknown API path returns JSON error with handler404."""
+    r = client.get("/api/this-endpoint-does-not-exist")
+    assert r.status_code == 404
+    data = r.json()
+    assert data.get("status") == 404
+    assert data.get("detail") == "Nenalezeno"

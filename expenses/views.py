@@ -6,7 +6,6 @@ from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth import authenticate, login, logout
 from django.shortcuts import render, redirect
 from django.shortcuts import get_object_or_404
-from django.http import JsonResponse
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -16,6 +15,8 @@ from rest_framework.decorators import api_view, permission_classes
 from django.contrib.auth.models import User
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from rest_framework.permissions import AllowAny
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.http import JsonResponse
 from .models import Event, Participant, Expense, Category
 from .serializers import EventSerializer, ParticipantSerializer, ExpenseSerializer, CategorySerializer
 from .forms import ParticipantForm
@@ -48,7 +49,11 @@ class EventViewSet(viewsets.ModelViewSet):
         if form.is_valid():
             participant = form.save(commit=False)
             participant.event = event
-            participant.save()
+            try:
+                participant.save()
+            except DjangoValidationError as e:
+                detail = getattr(e, 'message_dict', None) or {'non_field_errors': e.messages}
+                return Response(detail, status=400)
             serializer = ParticipantSerializer(participant)
             return Response(serializer.data, status=201)
         return Response(form.errors, status=400)
@@ -100,13 +105,13 @@ class ExpenseViewSet(viewsets.ModelViewSet):
             try:
                 event = Event.objects.get(pk=event_id)
             except Event.DoesNotExist:
-                raise ValidationError({'event': 'Event with this ID does not exist.'})
+                raise ValidationError({'event': 'Událost s tímto ID neexistuje.'})
 
         if category_id:
             try:
                 category = Category.objects.get(pk=category_id)
             except Category.DoesNotExist:
-                raise ValidationError({'category': 'Category with this ID does not exist.'})
+                raise ValidationError({'category': 'Kategorie s tímto ID neexistuje.'})
 
         if split_between_ids:
             if isinstance(split_between_ids, str):
@@ -114,11 +119,18 @@ class ExpenseViewSet(viewsets.ModelViewSet):
                 split_between_ids = [s for s in split_between_ids.split(',') if s]
             split_between = Participant.objects.filter(id__in=split_between_ids)
             if split_between.count() != len(split_between_ids):
-                raise ValidationError({'split_between': 'One or more participants do not exist.'})
+                raise ValidationError({'split_between_ids': 'Jeden nebo více účastníků neexistuje.'})
 
-        expense = serializer.save(event=event, category=category)
-        if split_between is not None:
-            expense.split_between.set(split_between)
+        try:
+            expense = serializer.save(event=event, category=category)
+            if split_between is not None:
+                expense.split_between.set(split_between)
+            return expense
+        except DjangoValidationError as e:
+            detail = getattr(e, 'message_dict', None) or {'non_field_errors': e.messages}
+            if isinstance(detail, dict) and 'split_between' in detail and 'split_between_ids' not in detail:
+                detail['split_between_ids'] = detail.pop('split_between')
+            raise ValidationError(detail)
 
 
 # CategoryViewSet for registration in urls.py
@@ -195,3 +207,27 @@ def signup_view(request):
     else:
         form = UserCreationForm()
     return render(request, 'registration/signup.html', {'form': form})
+
+def api_bad_request(request, exception):
+    return JsonResponse(
+        {"detail": "Špatný požadavek", "status": 400, "path": request.path},
+        status=400
+    )
+
+def api_permission_denied(request, exception):
+    return JsonResponse(
+        {"detail": "Přístup odepřen", "status": 403, "path": request.path},
+        status=403
+    )
+
+def api_not_found(request, exception):
+    return JsonResponse(
+        {"detail": "Nenalezeno", "status": 404, "path": request.path},
+        status=404
+    )
+
+def api_server_error(request):
+    return JsonResponse(
+        {"detail": "Interní chyba serveru", "status": 500, "path": request.path},
+        status=500
+    )

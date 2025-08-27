@@ -8,7 +8,7 @@ from rest_framework.routers import DefaultRouter
 from expenses import views as expense_views
 
 # Register API endpoints with DRF router
-router = DefaultRouter()
+router = DefaultRouter(trailing_slash='/?')
 router.register(r'events', expense_views.EventViewSet, basename='event')
 router.register(r'participants', expense_views.ParticipantViewSet, basename='participant')
 router.register(r'expenses', expense_views.ExpenseViewSet, basename='expense')
@@ -26,3 +26,9 @@ urlpatterns = [
     path("api/me/", expense_views.api_me, name="api_me"),  # Current session info
     path("api/csrf/", expense_views.api_csrf, name="api_csrf"),  # CSRF bootstrap endpoint
 ]
+
+# Consistent JSON error handlers (implemented in expenses.views)
+handler400 = 'expenses.views.api_bad_request'
+handler403 = 'expenses.views.api_permission_denied'
+handler404 = 'expenses.views.api_not_found'
+handler500 = 'expenses.views.api_server_error'
